@@ -1,6 +1,5 @@
 import { Card, Form, Input, Button, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import request from '../libs/request'
 import { useAuth } from '../hooks/useAuth'
 
 
@@ -11,13 +10,12 @@ export default function Login() {
 
     const onFinish = async (values: { username: string; password: string }) => {
         try {
-            // 示例：后端返回 { token, user }
-            const data = await request.post('/login', values)
-            login(data.token, data.user)
+            console.log('values', values)
+            login('12345', { id: '23', name: 'admin'})
             message.success('登录成功')
             navigate('/dashboard')
-        } catch (e: any) {
-            message.error(e?.response?.data?.message || '登录失败')
+        } catch (error: unknown) {
+            message.error((error as Error).message || '登录失败')
         }
     }
 
