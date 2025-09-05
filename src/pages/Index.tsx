@@ -1,31 +1,54 @@
-import { Space, Form, Input, Tag, Button, message, Table } from 'antd'
+import { Space, Row, Col, Form, Input, Tooltip, Tag, Button, message, Table } from 'antd'
 import React, { useEffect, useState } from 'react';
 import { getBalance } from '../api/index'
-
-interface DataType {
-  id: string;
-  address: string;
-  amount: number;
-  sign: string;
-  hash: string;
-  status: "pending" | "success" | "failed";
-}
+import type { DataType } from '../types/types'
+import { shortenString } from '../utils/utils'
 
 const Index: React.FC = () => {
   const [form] = Form.useForm();
   const [data, setData] = useState<DataType[]>([]);
   const [loading, setLoading] = useState(false);
+  const [tabLoading, setTabLoading] = useState(false);
   const [address, setAddress] = useState<string>('')
-  const [page, setPage] = useState({ current: 1, pageSize: 5, total: 0 })
+  const [page, setPage] = useState({ current: 1, pageSize: 2, total: 0 })
 
+  //初始获取数据
   const getDataList = async () => {
     const data = await getBalance(address)
-    console.log('data', data)
-    setLoading(false)
+    const list: DataType[] = [
+      {
+        id: '1',
+        address: 'kaspatest:qr2epum0jpmez0f8xh2wyja4d47tawjq9en8k6pm2ea3yvacc45zq35kvxn8k',
+        amount: 100,
+        sign: 'e185367dd88d1fd8034000138f14a57974458a180e8b507c715b215f6912558e',
+        hash: '0x1234567890',
+        status: 'success'
+      },
+      {
+        id: '2',
+        address: 'kaspatest:qzzs70n72mpzqpr3tzcd4yp9hlzdrn547fnxlgc5y9tg8e8566ugxm9ez4p56',
+        amount: 100,
+        sign: 'e185367dd88d1fd8034000138f14a57974458a180e8b507c715b215f6912558e',
+        hash: '0x1234567890',
+        status: 'failed'
+      },
+      {
+        id: '3',
+        address: 'kaspatest:qz65c2hyvkw784pthdtnj6pdgh6ua2nj42e6jvwrtr6pzwrj7vjvq7we6h6kv',
+        amount: 100,
+        sign: 'e185367dd88d1fd8034000138f14a57974458a180e8b507c715b215f6912558e',
+        hash: '0x1234567890',
+        status: 'pending'
+      },
+    ]
+    if(data) {
+      setTabLoading(false)
+      setData(list)
+    }
   }
 
   useEffect(() => {
-    setLoading(true)
+    setTabLoading(true)
     getDataList()
   }, [address])
 
@@ -34,12 +57,12 @@ const Index: React.FC = () => {
     setLoading(true)
     form.validateFields().then((values) => {
       const newRow: DataType = {
-        id: Date.now().toString(),
+        id: Math.random().toString(36).substring(2, 6),
         address: values.address,
         amount: values.amount,
         sign: "signature",
         hash: Math.random().toString(36).substring(2, 12),
-        status: "pending",
+        status: Math.random()*10 > 5 ? "success" : "pending",
       };
       setData((prev) => [newRow, ...prev]);
       setPage((p) => ({ ...p, total: data.length + 1 }));
@@ -75,10 +98,28 @@ const Index: React.FC = () => {
   //表格
   const columns = [
     { title: "ID", dataIndex: "id", key: "id", width: 100 },
-    { title: "地址", dataIndex: "address", key: "address" },
+    { title: "地址", dataIndex: "address", key: "address",
+      render: (text: string) => {
+        return <Tooltip title={text} >
+            <span>{ shortenString(text, 3, 8) }</span>
+          </Tooltip>
+      }
+    },
     { title: "金额", dataIndex: "amount", key: "amount" },
-    { title: "签名", dataIndex: "signature", key: "signature" },
-    { title: "Hash", dataIndex: "hash", key: "hash" },
+    { title: "签名", dataIndex: "sign", key: "sign",
+      render: (text: string) => {
+        return <Tooltip title={text} >
+            <span>{ shortenString(text, 3, 8) }</span>
+          </Tooltip>
+      }
+    },
+    { title: "Hash", dataIndex: "hash", key: "hash",
+      render: (text: string) => {
+        return <Tooltip title={text} >
+            <span>{ shortenString(text, 3, 8) }</span>
+          </Tooltip>
+      }
+    },
     {
       title: "状态",
       dataIndex: "status",
@@ -92,6 +133,7 @@ const Index: React.FC = () => {
     {
       title: "操作",
       key: "action",
+      width: 210,
       render: (_: unknown, record: DataType) => ( // ✅ 类型安全
         <Space>
           <Button size="small" onClick={() => handleAction(record, "send")}>
@@ -119,33 +161,43 @@ const Index: React.FC = () => {
   return (
     <>
       <div className='page-box'>
-        <Form form={form} layout="inline" onFinish={onSubmit}>
-          <Form.Item
-            name="address"
-            label="地址"
-            rules={[{ required: true, message: "请输入地址" }]}
-          >
-            <Input placeholder="请输入地址" value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: 260 }} />
-          </Form.Item>
-          <Form.Item
-            name="amount"
-            label="金额"
-            rules={[{ required: true, message: "请输入金额" }]}
-          >
-            <Input placeholder="请输入金额" style={{ width: 160 }} />
-          </Form.Item>
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading}>
-              提交
-            </Button>
-          </Form.Item>
-        </Form>
+        <Row>
+          <Form form={form} style={{ width: "100%"}} layout="inline" onFinish={onSubmit}>
+            <Col span={8}>
+              <Form.Item
+                name="address"
+                label="地址"
+                rules={[{ required: true, message: "请输入地址" }]}
+              >
+                <Input placeholder="请输入地址" value={address} onChange={(e) => setAddress(e.target.value)} style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
+              <Form.Item
+                name="amount"
+                label="金额"
+                rules={[{ required: true, message: "请输入金额" }]}
+              >
+                <Input placeholder="请输入金额" style={{ width: "100%" }} />
+              </Form.Item>
+            </Col>
+            <Col span={2} offset={8}>
+              <Form.Item>
+                <Button type="primary" htmlType="submit" loading={loading}>
+                  提交
+                </Button>
+              </Form.Item></Col>
+          </Form>
+        </Row>
         <Table
-          style={{ marginTop: 24 }}
+          style={{ marginTop: 24, height: "calc(100vh - 300px)"  }}
           rowKey="id"
+          size={"small"}
           columns={columns}
           dataSource={pagedData}
-          scroll={{ y: 800 }}
+          loading={tabLoading}
+          scroll={{ y: 500 }} 
+          bordered
           pagination={{
             current: page.current,
             pageSize: page.pageSize,

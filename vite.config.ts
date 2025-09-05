@@ -7,7 +7,6 @@ export default defineConfig(({ mode }) => {
   const API_BASE = env.VITE_API_BASE || '/api'
   const API_TARGET = env.VITE_API_TARGET || 'http://localhost:3000'
 
-  console.log('API_BASE', API_BASE)
   return {
     plugins: [react()],
     resolve: {

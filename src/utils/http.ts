@@ -2,7 +2,6 @@ import axios from 'axios';
 import type { RequestParams, ErrorResponse } from '../types/types';
 import type { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
-// const baseURL: string = API_BASE_URL || '';
 const baseURL = import.meta.env.VITE_API_BASE || '/api';
 const instance: AxiosInstance = axios.create({
     baseURL,
@@ -25,9 +24,7 @@ export const get = async <T = unknown>(
     config: AxiosRequestConfig = {}
 ): Promise<T> => {
     try {
-        console.log('url', url)
         const response: AxiosResponse<T> = await instance.get(url, { params, ...config });
-        console.log('response', response)
         return response.data;
     } catch (error) {
         throw handleError(error);
