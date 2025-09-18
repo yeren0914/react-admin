@@ -47,6 +47,16 @@ button {
   padding-top: 40px;
 }
 
+.page-container {
+  min-height: 100vh;
+  background: var(--ant-color-bg-layout);
+}
+.page-content {
+  padding: 0 20px;
+}
+.table-row-even { background: #fcfcff; }
+.table-row-odd { background: #ffffff; }
+.ant-table-thead > tr > th { font-weight: 600; }
 
 @media (prefers-color-scheme: light) {
   :root {
