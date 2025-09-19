@@ -26,6 +26,7 @@ const Copyable: React.FC<Props> = ({ value, display }) => {
         <Button
           size="small"
           type="text"
+          shape="circle"
           aria-label="copy"
           icon={<CopyOutlined />}
           onClick={onCopy}

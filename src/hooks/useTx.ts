@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getTx } from "../wallet/singleton";
 import Tx from "../wallet/index";
 
-export const useTx = (): { tx: Tx | null; loading: boolean } => {
+export const useTx = () => {
   const [tx, setTx] = useState<Tx | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -25,5 +25,24 @@ export const useTx = (): { tx: Tx | null; loading: boolean } => {
     };
   }, []);
 
-  return { tx, loading };
+  const ensureWallet = useCallback(async (): Promise<Tx | null> => {
+    let instance = tx;
+    if (!instance) {
+      instance = await getTx();
+      setTx(instance);
+    }
+
+    if (instance && !instance.address) {
+      try {
+        await instance.connectWallet();
+      } catch (err) {
+        console.error("Wallet connect failed", err);
+        return null;
+      }
+    }
+
+    return instance;
+  }, [tx]);
+
+  return { tx, loading, ensureWallet };
 };

@@ -166,16 +166,17 @@ const TransactionTable: React.FC<Props> = ({
 
   //表格字段绑定
   const columns: ColumnsType<DataType> = [
-    { title: "ID", dataIndex: "id", key: "id", width: 60},
+    { title: "ID", dataIndex: "id", key: "id", width: 50, fixed: "left"},
+    { title: "Create Type", dataIndex: "createType", key: "createType", width: 125},
     {
       title: "Creator Address",
       dataIndex: "creator",
       key: "creator",
-      width: 200,
+      width: 140,
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={text} placement="right">
-          <Copyable value={text} display={shortenString(text, 4, 10)} />
+          <Copyable value={text} display={shortenString(text, 4, 4)} />
         </Tooltip>
       ),
     },
@@ -183,32 +184,19 @@ const TransactionTable: React.FC<Props> = ({
       title: "Receiver",
       dataIndex: "receiver",
       key: "receiver",
-      width: 160,
+      width: 140,
       ellipsis: true,
       render: (text: string) => (
         <Tooltip title={text}>
-          <Copyable value={text} display={shortenString(text, 4, 10)} />
-        </Tooltip>
-      ),
-    },
-    { title: "Create Type", dataIndex: "createType", key: "createType", width: 90},
-    {
-      title: "Address",
-      dataIndex: "to",
-      key: "to",
-      width: 160,
-      ellipsis: true,
-      render: (text: string) => (
-        <Tooltip title={text}>
-          <Copyable value={text} display={shortenString(text, 4, 10)} />
+          <Copyable value={text} display={shortenString(text, 4, 4)} />
         </Tooltip>
       ),
     },
     {
-      title: "ExecutionTxHash",
-      dataIndex: "executionTxHash",
-      key: "executionTxHash",
-      width: 160,
+      title: "ProposalTxHash",
+      dataIndex: "proposalTxHash",
+      key: "proposalTxHash",
+      width: 140,
       ellipsis: true,
       render: (text: string) => (
         text ?
@@ -218,10 +206,10 @@ const TransactionTable: React.FC<Props> = ({
       ),
     },
     {
-      title: "ProposalTxHash",
-      dataIndex: "proposalTxHash",
-      key: "proposalTxHash",
-      width: 160,
+      title: "ExecutionTxHash",
+      dataIndex: "executionTxHash",
+      key: "executionTxHash",
+      width: 140,
       ellipsis: true,
       render: (text: string) => (
         text ?
@@ -234,13 +222,14 @@ const TransactionTable: React.FC<Props> = ({
       title: "Creation time",
       dataIndex: "createdAtFormatted",
       key: "createdAtFormatted",
-      width: 140,
+      width: 160,
     },
     {
       title: "State",
       dataIndex: "status",
       key: "status",
-      width: 120,
+      fixed: "right",
+      width: 110,
       render: (status: number) => {
         const map: Record<number, { s: BadgeProps["status"]; text: string }> = {
           0: { s: "default", text: ListStatus[0] },
@@ -257,6 +246,7 @@ const TransactionTable: React.FC<Props> = ({
       title: "Operation",
       key: "action",
       width: 120,
+      fixed: "right",
       render: (_, record) => (
         <Space wrap>
           {
@@ -300,11 +290,13 @@ const TransactionTable: React.FC<Props> = ({
     <Table<DataType>
       rowKey="id"
       size="middle"
+      bordered
       columns={columns}
       dataSource={processedData}
       loading={loading}
       tableLayout="fixed"
       sticky
+      rowClassName={(_, idx) => (idx! % 2 === 0 ? 'table-row-even' : 'table-row-odd')}
       scroll={{ x: 1000, y: 480 }}
       locale={{ emptyText: <Empty description="No data temporarily" /> }}
       pagination={{

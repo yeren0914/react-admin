@@ -7,6 +7,7 @@ import { signLogin } from "../utils/sign";
 import { login } from "../api/index";
 import { shortenString } from "../utils/utils";
 import { useTx } from '../hooks/useTx'
+import KasplexIcon from '../assets/kasplex.ico'
 
 const { Text } = Typography;
 
@@ -16,87 +17,65 @@ const HeaderBar: React.FC = () => {
   const showMsg = useMessageApi();
   const [loading, setLoading] = React.useState(false);
 
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
+  useEffect(() => { hydrate(); }, [hydrate]);
 
-  const { tx } = useTx();
+  const { ensureWallet } = useTx();
 
-  // 登录
   const loginFun = async () => {
-    if (!tx) return; 
-    const time = new Date().toISOString();
-    if (!tx.address) {
-      await tx.connectWallet();
+    const instance = await ensureWallet();
+    if (!instance || !instance.signer || !instance.address) {
+      showMsg("error", "Wallet not connected");
+      return;
     }
-    const signer = tx.signer;
-    if (signer && tx.address) {
+    const time = new Date().toISOString();
+    if (!instance.address) await instance.connectWallet();
+    const signer = instance.signer;
+    if (signer && instance.address) {
       try {
         setLoading(true);
-        const signature = await signLogin(signer, {
-          address: tx.address,
-          login_at: time,
-        });
-
-        const res = await login(tx.address, time, signature);
-        if (res.error && res.error.message) {
-          showMsg("error", res.error.message!);
-          return;
-        }
-        if (res.data && res.data.token) {
+        const signature = await signLogin(signer, { address: instance.address, login_at: time });
+        const res = await login(instance.address, time, signature);
+        if (res.error?.message) { showMsg("error", res.error.message!); return; }
+        if (res.data?.token) {
           showMsg("success", "Login succeeded");
-          loginHooks(res.data.token, { address: tx.address });
-          triggerRefresh()
+          loginHooks(res.data.token, { address: instance.address });
+          triggerRefresh();
         }
-      } catch (error) {
+      } catch {
         showMsg("error", "Login failed");
-        console.log('error', error)
       } finally {
         setLoading(false);
       }
     }
   };
 
-  // 退出登录
   const logoutFun = () => {
     logoutHooks();
+    triggerRefresh()
     showMsg("success", "Logged out");
   };
 
   return (
-    <div
-      style={{
-        background: "#fff",
-        padding: "0 24px",
-        display: "flex",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        height: 55,
-        borderBottom: "1px solid #eee",
-      }}
-    >
-      {user?.address ? (
-        <Space size="large">
-          <Text strong>{shortenString(user.address, 6, 6)}</Text>
-          <Button
-            danger
-            type="primary"
-            icon={<LogoutOutlined />}
-            onClick={logoutFun}
-          >
-            Log out
-          </Button>
+    <div className="app-header">
+      <div className="app-header-inner">
+        <Space size={10} align="center">
+          <img className="logo" src={KasplexIcon } alt="" />
+          <Text strong style={{ color: "#e2e8f0", marginLeft: 4 }}>Multi-Sign</Text>
         </Space>
-      ) : (
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          loading={loading}
-          onClick={loginFun}
-        >
-          Login
-        </Button>
-      )}
+
+        {user?.address ? (
+          <Space size="large" align="center">
+            <span className="header-addr">{shortenString(user.address, 6, 6)}</span>
+            <Button danger type="primary" icon={<LogoutOutlined />} onClick={logoutFun}>
+              Log out
+            </Button>
+          </Space>
+        ) : (
+          <Button type="primary" icon={<SendOutlined />} loading={loading} onClick={loginFun}>
+            Login
+          </Button>
+        )}
+      </div>
     </div>
   );
 };

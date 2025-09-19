@@ -23,6 +23,7 @@ import {
   TimelockAbi,
   FeeDispatcherAbi,
 } from '../utils/constants'
+import { errorMsg } from '../utils/error'
 import { checkTimelockPermission } from '../utils/timelock'
 
 const TransactionStatus = {
@@ -52,7 +53,7 @@ class Tx {
   public address: string | null = null
 
   constructor() {
-    this.chainId = chainId
+    this.chainId = chainId.toString()
     this.rpcUrl = rpcUrl
     this.multicallAddress = multicall
     this.multisignAddress = multisign
@@ -67,6 +68,7 @@ class Tx {
     }
   }
 
+  //链接钱包
   public async connectWallet(): Promise<{
     provider: providers.Web3Provider
     signer: Signer
@@ -75,9 +77,7 @@ class Tx {
     if (!window.ethereum) {
       throw new Error('Please install MetaMask')
     }
-
     await window.ethereum.request({ method: 'eth_requestAccounts' })
-
     const provider = new providers.Web3Provider(window.ethereum)
     const signer = provider.getSigner()
     this.signer = signer
@@ -100,12 +100,16 @@ class Tx {
     return { provider, signer, address: this.address }
   }
 
+  //获取Nonce
   private async getNonce(): Promise<ethers.BigNumber> {
-    if (!this.multisignContract)
+    if (!this.multisignContract) {
       throw new Error('Multisign contract not initialized')
-    return await this.multisignContract.getNonce()
+    }
+    console.log('multisignContract', this.multisignAddress)
+    return (await this.multisignContract.getNonce()).toNumber()
   }
 
+  //校验地址
   private isValidAddress(address: string): true {
     if (!utils.isAddress(address)) {
       throw new Error(`Invalid address: ${address}`)
@@ -113,6 +117,7 @@ class Tx {
     return true
   }
 
+  //校验 threshold
   private validateThreshold(threshold: number): void {
     if (Number.isNaN(threshold) || threshold < 1) {
       throw new Error('Threshold must be greater than 0')
@@ -126,6 +131,11 @@ class Tx {
   ): string {
     const localIface = new utils.Interface(abi)
     return localIface.encodeFunctionData(method, params)
+  }
+
+  public async isReceiver(address: string): Promise<boolean> {
+    if (!this.feeDispatcherContract) return false
+    return await this.feeDispatcherContract.isReceiver(address)
   }
 
   /** 检查当前钱包是否已经签名了交易 */
@@ -161,13 +171,12 @@ class Tx {
           if (v >= 27 && v <= 28) {
             // ok
           } else if (v >= 31 && v <= 34) {
-            v -= 4 // Gnosis Safe v > 30
+            v -= 4
           } else if (v === 0 || v === 1) {
             v += 27
           }
           recovered = ethers.utils.recoverAddress(txHash, { v, r, s })
         }
-
         if (recovered.toLowerCase() === this.address!.toLowerCase()) {
           return true
         }
@@ -198,9 +207,9 @@ class Tx {
   /** 创建多签签名 */
   private async createMultiSignSignature(
     to: string,
-    value: number,
+    value: ethers.BigNumberish,
     data: string,
-    nonce: bigint
+    nonce: ethers.BigNumberish
   ) {
     if (!this.multisignContract || !this.signer || !this.address) {
       throw new Error('Multisign contract not initialized')
@@ -249,11 +258,10 @@ class Tx {
         signatureForVerify
       )
       if (recoveredAddress.toLowerCase() !== this.address.toLowerCase()) {
-        throw new Error('Signature verification failed: address mismatch')
+        throw Error(errorMsg(undefined, 'sign-address-failed'))
       }
     } catch (error) {
-      console.log('❌ Signature verification failed:', error)
-      throw error
+      throw Error(errorMsg(error, 'sign-failed'))
     }
 
     return ret
@@ -489,7 +497,6 @@ class Tx {
   // ==============================
   public async createTransaction(createParams: CreateParams) {
     if (!createParams.type) throw Error('Please select a transaction type')
-
     let txParams = null
     switch (createParams.type) {
       case 1:
@@ -526,14 +533,13 @@ class Tx {
     }
 
     if (!txParams) {
-      throw Error('Transaction parameter generation failed')
+      throw Error(errorMsg(undefined, 'params-error'))
     }
-
     const signature = await this.createMultiSignSignature(
       txParams.to,
-      Number(txParams.value),
+      txParams.value,
       txParams.data,
-      BigInt(Number(txParams.nonce))
+      txParams.nonce
     )
 
     return {
@@ -545,42 +551,34 @@ class Tx {
     }
   }
 
-  public async createAddReceiverTransaction(toAddress: string) {
+  async createAddReceiverTransaction(toAddress: string) {
+    if (!this.timelockContract || !this.address) return
     try {
-      this.isValidAddress(toAddress)
-
       const feeDispatcherInterface = new ethers.utils.Interface([
-        'function addReceiver(address receiver) external',
-      ])
-      const addReceiverData = feeDispatcherInterface.encodeFunctionData(
-        'addReceiver',
-        [toAddress]
-      )
+        'function addReceiver(address receiver) external'
+      ]);
 
-      const target = this.feeDispatcherAddress
-      const value = 0
-      const predecessor = ethers.constants.HashZero
-      const salt = ethers.constants.HashZero
-      const delay = await this.timelockContract!.getMinDelay()
-
-      const scheduleData = this.timelockContract!.interface.encodeFunctionData(
-        'schedule',
-        [target, value, addReceiverData, predecessor, salt, delay]
-      )
-
-      const to = this.timelockAddress
-      const nonce = await this.getNonce()
-
+      const timestamp = Math.floor(Date.now() / 1000)
+      const addReceiverData = feeDispatcherInterface.encodeFunctionData('addReceiver', [toAddress]);
+      const target = this.feeDispatcherAddress;
+      const value = 0;
+      const predecessor = ethers.constants.HashZero;
+      const salt = ethers.utils.keccak256(ethers.utils.defaultAbiCoder.encode(['uint256'], [timestamp]))
+      const delay = await this.timelockContract.getMinDelay();
+      const scheduleData = this.timelockContract.interface.encodeFunctionData('schedule', [
+        target, value, addReceiverData, predecessor, salt, delay
+      ]);
+      const to = this.timelockAddress;
+      const nonce = await this.getNonce();
       return {
         to,
-        value,
         data: scheduleData,
-        operation: 0,
-        nonce: BigInt(Number(nonce)),
-      }
-    } catch (error) {
-      const msg = typeof error === 'string' ? error : 'Encoding function failed'
-      throw new Error(msg)
+        value: '0',
+        nonce
+      };
+    }
+    catch (error) {
+      throw Error(errorMsg(error, 'function-code-error'))
     }
   }
 
@@ -606,8 +604,7 @@ class Tx {
 
       return { to: this.timelockAddress, data: scheduleData, value, nonce }
     } catch (error) {
-      console.log('Encoding function failed', error)
-      return null
+      throw Error(errorMsg(error, 'function-code-error'))
     }
   }
 
@@ -624,8 +621,7 @@ class Tx {
 
       return { to: this.multisignAddress, data, value: '0', nonce }
     } catch (error) {
-      console.error('❌ 创建 AddOwner 交易失败:', error)
-      return null
+      throw Error(errorMsg(error, 'addOwner-error'))
     }
   }
 
@@ -652,7 +648,7 @@ class Tx {
 
       return { to: this.multisignAddress, data, value: '0', nonce }
     } catch (error) {
-      console.log('err', error)
+      throw Error(errorMsg(error, 'removeOwber-error'))
     }
   }
 
@@ -693,9 +689,7 @@ class Tx {
         return await this.executeMultiSignTransaction(tx)
       }
     } catch (error) {
-      const msg = typeof error === 'string' ? error : 'Failed to create MultiSign transaction'
-      console.log('msg', msg)
-      throw Error(msg)
+      throw Error(errorMsg(error, 'multi-sign-error'))
     }
   }
 
@@ -707,92 +701,21 @@ class Tx {
         return await this.executeTimelockTransaction(decoded)
       }
     } catch (error) {
-      const msg = typeof error === 'string' ? error : 'Failed to create timeLock transaction'
-      throw Error(msg)
+      throw Error(errorMsg(error, 'time-lock-error'))
     }
   }
-
-  private recoverOwnerFromSignature(dataHash: string, sig: string): string {
-    const hex = sig.startsWith('0x') ? sig.slice(2) : sig;
-    const r = '0x' + hex.slice(0, 64);
-    const s = '0x' + hex.slice(64, 128);
-    const vRaw = parseInt(hex.slice(128, 130), 16);
-
-    if (vRaw === 1) {
-      // 伪签名：r 里装的是 owner（左填充到 32 字节）
-      const owner = ethers.utils.hexDataSlice(r, 12); // 取后 20 字节
-      return ethers.utils.getAddress(owner);
-    }
-
-    if (vRaw > 30) {
-      const v = vRaw - 4;
-      const sigForVerify = ethers.utils.hexlify(
-        ethers.utils.concat([
-          r, s, ethers.utils.hexZeroPad(ethers.utils.hexlify(v), 1)
-        ])
-      );
-      return ethers.utils.verifyMessage(
-        ethers.utils.arrayify(dataHash),
-        sigForVerify
-      );
-    }
-
-    const v = (vRaw === 0 || vRaw === 1) ? vRaw + 27 : vRaw;
-    return ethers.utils.verifyMessage(
-      ethers.utils.arrayify(dataHash),
-      { r, s, v }
-    );
-  }
-
-
-
+  
   private async executeMultiSignTransaction(tx: MultiSignTx) {
     try {
       if (!this.signer || !this.multisignContract || !this.address) {
-        this.connectWallet()
-        throw Error('Please initialize the wallet first')
-      }
-      console.log('正在生成批准签名...')
-      const currentNonce = await this.multisignContract.getNonce();
-      if (Number(currentNonce) !== tx.nonce) {
-        console.log('nonce 不一致')
+        await this.connectWallet()
         return
-      } else {
-        console.log('currentNonce', Number(currentNonce))
-        console.log('tx nonce', tx.nonce)
       }
-
-      // const dataHash = await this.multisignContract.getTransactionHash(
-      //   tx.to, tx.value, tx.data, tx.nonce
-      // );
-
-      // const mySignature = await this.createMultiSignSignature(
-      //   tx.to, Number(tx.value), tx.data, BigInt(tx.nonce)
-      // );
-      // console.log('mySignature', mySignature)
-      // console.log('currentAddress', this.address)
-
-      // const packed = this.sortAndPackSignaturesByOwner(dataHash, [
-      //   tx.signature,
-      //   mySignature
-      // ]);
-      // console.log('tx.signature', tx.signature)
-      const owners = await this.multisignContract.getOwners();
-      const threshold = await this.multisignContract.getThreshold?.() ?? 2;
-      // console.log('正在执行 MultiSign 交易...');
-      // const txResponse = await this.multisignContract.connect(this.signer)
-      //   .execTransaction(tx.to, tx.value, tx.data, packed, { value: tx.value });
-
       const approveSignature = this.createApproveSignature(this.address)
       const allSignatures = tx.creator.toLowerCase() < this.address.toLowerCase()
         ? ethers.utils.concat([tx.signature, approveSignature])
         : ethers.utils.concat([approveSignature, tx.signature])
 
-      console.log('owners        :', owners);
-      console.log('threshold     :', Number(threshold));
-      console.log('packed length :', (allSignatures.length - 2) / 130, 'signatures');
-      console.log('allSignatures', allSignatures.length)
-      console.log('正在执行MultiSign交易...');
       const txResponse = await this.multisignContract.connect(this.signer).execTransaction(
         tx.to,
         tx.value,
@@ -800,9 +723,7 @@ class Tx {
         allSignatures,
         { value: tx.value }
       )
-      console.log('等待交易确认...')
       await txResponse.wait()
-      console.log('✅ 交易已确认!')
       return {
         status:
           tx.to.toLowerCase() === this.timelockAddress.toLowerCase()
@@ -811,8 +732,7 @@ class Tx {
         txid: txResponse.hash,
       }
     } catch (error) {
-      console.error('MultiSign交易执行失败:', error)
-      throw Error('MultiSign transaction execution failed')
+      throw Error(errorMsg(error, 'multisign'))
     }
   }
 
@@ -820,8 +740,8 @@ class Tx {
     try {
       if (!decoded.timelockOperation) throw new Error('Timelock operation does not exist')
       if (!this.signer || !this.timelockContract || !this.address) {
-        this.connectWallet()
-        throw Error('Please initialize the wallet first')
+        await this.connectWallet()
+        return
       }
       const timelockOp = decoded.timelockOperation
       const txResponse = await this.timelockContract
@@ -835,13 +755,11 @@ class Tx {
           { value: timelockOp.value }
         )
 
-      console.log('等待交易确认...')
       await txResponse.wait()
       console.log('✅ 交易已确认!')
       return { status: TransactionStatus.EXECUTED, txid: txResponse.hash }
     } catch (error) {
-      const msg = typeof error === 'string' ? error : 'Timelock transaction execution failed'
-      throw Error(msg)
+      throw Error(errorMsg(error, 'timelock'))
     }
   }
 }

@@ -7,6 +7,16 @@ import type {
   MultiSignSwapOwner,
   DecodedResult
 } from '../types/types'
+import { getConfig } from '../utils/env'
+const { CONFIG_CHAIN_ID, CONFIG_RPC_URL, CONFIG_MULTICALL,
+  CONFIG_MULTISIGN,
+  CONFIG_TIME_LOCK,
+  CONFIG_FEE_DISPATCHER,
+  CONFIG_EXECUTOR,
+  CONFIG_OWNER0,
+  CONFIG_OWNER1,
+  CONFIG_OWNER2,
+ } = getConfig()
 
 //---------常量配置------------
 export const TransactionType = [
@@ -19,24 +29,23 @@ export const TransactionStatusList = [
   { label: 'SIGNE', value: 2 },
   { label: 'PROPOSED', value: 3 },
   { label: 'EXECUTED', value: 4 },
-  { label: 'CLOSED', value: 5 },
+  // { label: 'CLOSED', value: 5 },
   { label: 'ALL', value: -1 },
 ]
 
 export const ownerList = [
-  '0xe65F4EA0c461693f6051845C195a14AD9701C2b4',
-  '0x29B011952eaF39D38804A8C4efCe3c5D502a3ab0',
-  '0x3EF5CDf950610FD3D3df7Ae245748E067A37028c'
+  CONFIG_OWNER0,
+  CONFIG_OWNER1,
+  CONFIG_OWNER2,
 ]
 
-export const API_BASE_URL = import.meta.env.VITE_API_TARGET
-export const chainId = import.meta.env.VITE_CONFIG_CHAIN_ID
-export const rpcUrl = import.meta.env.VITE_CONFIG_RPC_URL
-export const multicall = import.meta.env.VITE_CONFIG_MULTICALL
-export const multisign = import.meta.env.VITE_CONFIG_MULTISIGN
-export const timelock = import.meta.env.VITE_CONFIG_TIME_LOCK
-export const feeDispatcher = import.meta.env.VITE_CONFIG_FEE_DISPATCHER
-export const executor = import.meta.env.VITE_CONFIG_EXECUTOR
+export const chainId = CONFIG_CHAIN_ID
+export const rpcUrl = CONFIG_RPC_URL
+export const multicall = CONFIG_MULTICALL
+export const multisign = CONFIG_MULTISIGN
+export const timelock = CONFIG_TIME_LOCK
+export const feeDispatcher = CONFIG_FEE_DISPATCHER
+export const executor = CONFIG_EXECUTOR
 
 //---------ABI 信息-----------
 export const MultiSignAbi = [
@@ -48,8 +57,8 @@ export const MultiSignAbi = [
   'function addOwnerWithThreshold(address owner, uint256 threshold) external',
   'function removeOwner(address prevOwner, address newOwner, uint256 threshold) external',
   'function swapOwner(address prevOwner, address oldOwner, address newOwner) external',
-  'function approveHash(bytes32 hashToApprove) external',
-  'event ExecutionSuccess(bytes32 indexed txHash, uint256 value)'
+  'event ExecutionSuccess(bytes32 indexed txHash, uint256 value)',
+  'function checkSignatures(address executor, bytes32 dataHash, bytes signatures) external view'
 ]
 
 export const TimelockAbi = [
@@ -65,7 +74,8 @@ export const TimelockAbi = [
 
 export const FeeDispatcherAbi = [
   'function addReceiver(address receiver) external',
-  'function removeReceiver(address receiver) external'
+  'function removeReceiver(address receiver) external',
+  'function isReceiver(address _receiver) external view returns (bool)',
 ]
 
 //---------辅助函数-----------
